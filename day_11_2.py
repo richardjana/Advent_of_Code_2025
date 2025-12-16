@@ -1,10 +1,6 @@
 import networkx as nx
 import numpy as np
 
-
-### any "choke"-points along the path, that I could use to segment the problem?
-
-
 with open('input_11.txt', 'r') as in_file:
     lines = in_file.readlines()
 
@@ -23,11 +19,7 @@ for start, ends in data.items():
 
 def contract_for_directed_paths(G):
     """
-    Contract degree-1-in/degree-1-out nodes in a directed graph
-    and remove dead-end nodes.
-    Returns:
-        CG : contracted directed graph
-        contraction : dict mapping (u,v) -> list of nodes contracted between u and v
+    Contract degree-1-in/degree-1-out nodes in a directed graph and remove dead-end nodes.
     """
     G = G.copy()
 
@@ -35,10 +27,8 @@ def contract_for_directed_paths(G):
     while changed:
         changed = False
 
-        candidates = [
-            n for n in G.nodes
-            if G.in_degree(n) <= 1 and G.out_degree(n) <= 1 and n not in ['svr', 'dac', 'fft', 'out']
-        ]
+        candidates = [n for n in G.nodes
+                      if G.in_degree(n) <= 1 and G.out_degree(n) <= 1 and n not in ['svr', 'dac', 'fft', 'out']]
 
         if not candidates:
             break
@@ -47,57 +37,38 @@ def contract_for_directed_paths(G):
         (u,) = list(G.predecessors(n))
         (v,) = list(G.successors(n))
 
-        # Avoid creating self-loops like u → u
-        if u != v:
-            # build direct edge
+        if u != v:  # build direct edge
             G.add_edge(u, v)
 
-        # remove the contracted node
-        G.remove_node(n)
+        G.remove_node(n)  # remove the contracted node
         changed = True
 
     return G
 
 
-print(len(G))
 G = contract_for_directed_paths(G)  # 561 -> 542
-print(len(G))
 
-# another pruning test: on the middle points 542 -> 387
-for A in ['dac', 'fft']:
+for A in ['dac', 'fft']:  # pruning on the middle points 542 -> 387
     reachable_from_A = nx.descendants(G, A) | {A}
     can_reach_A = nx.ancestors(G, A) | {A}
-    G.remove_nodes_from([n for n in G if n not in can_reach_A and n not in reachable_from_A and n not in ['dac', 'fft']])
+    G.remove_nodes_from([n for n in G
+                         if n not in can_reach_A
+                         and n not in reachable_from_A
+                         and n not in ['dac', 'fft']])
     print('fft' in G.nodes, 'dac' in G.nodes)
 print(len(G))
 
-'''
-# detect choke points (dominators)
-dom = nx.immediate_dominators(G, 'svr')
-dom_tree = {v: dom[v] for v in dom if v != 'svr'}
-def dominators_of(node):
-    result = {node}
-    while node != 'svr':
-        node = dom[node]
-        result.add(node)
-    return result
-dom_END = dominators_of('out')
-mandatory_nodes = dom_END - {'svr'}
-print(mandatory_nodes)  # 'dac', 'fft'
-exit()
-'''
+def count_paths(G, start, end):
+    """ dynamic programming on DAG """
+    order = list(nx.topological_sort(G))
+    ways = {n: 0 for n in G}
+    ways[start] = 1
 
-for start, stop in [('svr', 'dac'), ('svr', 'fft'), ('dac', 'fft'), ('fft', 'dac'), ('dac', 'out'), ('fft', 'out')]:
-    count = 0
-    for path in nx.all_simple_paths(G, start, stop):
-        count += 1
-    print(start, stop, count)
-exit()
+    for u in order:
+        for v in G.successors(u):
+            ways[v] += ways[u]
 
-count = 0
-for path in nx.all_simple_paths(G, 'svr', 'out'):
-    if 'dac' in path and 'fft' in path:
-        count += 1
-        print(path)
+    return ways[end]
 
-print(count)
+print(count_paths(G, 'svr', 'dac')*count_paths(G, 'dac', 'fft')*count_paths(G, 'fft', 'out') +
+      count_paths(G, 'svr', 'fft')*count_paths(G, 'fft', 'dac')*count_paths(G, 'dac', 'out'))
